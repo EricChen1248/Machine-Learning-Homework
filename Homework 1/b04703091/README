@@ -1,0 +1,14 @@
+Homework 13 ~ 16 source code is in files 1-13.py, 1-14.py, 1-15.py, 1-16.py respectively
+
+The python files are written using python3.7, and require to be run with the following command to execute properly
+
+1-13.py ./features.train ./features.test
+
+
+Additional Libraries Used:
+    Matplotlib : download with pip
+    Numpy : download with pip
+    Libsvm
+        Only the Python and Windows implementation is attached in the folder lib to save space, if running on a different platform, redownload libsvm and replace the missing files in the folder
+
+        source: https://github.com/cjlin1/libsvm

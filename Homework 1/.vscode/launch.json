@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File (Integrated Terminal)",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Debug Homework 1-16",
+            "type": "python",
+            "request": "launch",
+            "program": "F:/Machine Learning/Homework 1/1-16.py",
+            "args": [ "./features.train" , "./features.test"],
+            "console": "integratedTerminal"
+        },
+    ]
+}
