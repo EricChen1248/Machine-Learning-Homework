@@ -9,15 +9,25 @@ TEST = 'hw2_adaboost_test.dat'
 
 train = pd.read_csv(TRAIN, sep=' ', header=None)
 train = train.astype(float)
-trainX = train[train.columns[:-1]]
-trainY = train[train.columns[-1]]
+train0 = train.sort_values(train.columns[0])
+train1 = train.sort_values(train.columns[1])
+
+trainX = [None, None]
+trainY = [None, None]
+
+trainX[0] = train0[train0.columns[:-1]]
+trainY[0] = train0[train0.columns[-1]]
+
+trainX[1] = train1[train1.columns[:-1]]
+trainY[1] = train1[train1.columns[-1]]
+
 #trainY = [float(y.replace('\n')) for y in trainY]
 
 test = pd.read_csv(TEST, sep=' ', header=None)
 testX = test[test.columns[:-1]]
 testY = test[test.columns[-1]]
-
 #%%
+'''
 def GenerateStump(xs, feature):
     stumps = []
     for r in range(len(xs) - 1):
@@ -88,13 +98,16 @@ G = GenerateG(iterations, trainX, trainY, features, stumps)
 
 #%%
 print(G)
+'''
 
-
+#%%
+# returns (s, i, e)
 def FindBestThresh(xs: pd.DataFrame, ys: pd.DataFrame, feature: int) -> tuple:
-    BestErrorPos = abs(ys.query(ys.columns[0] <= 0).sum())
-    BestErrorNeg = ys.query(ys.columns[0] > 0).sum()
-    BestThreshPos = None
-    BestThreshNeg = None
+    Total = sum(abs(y) for y in ys)
+    BestErrorPos = abs(sum((y if y <= 0 else 0) for y in ys))
+    BestErrorNeg = abs(sum((y if y > 0 else 0) for y in ys))
+    BestThreshPos = 0
+    BestThreshNeg = 0
     curErrorPos = BestErrorPos
     curErrorNeg = BestErrorNeg
     for i in range(len(xs) - 1):
@@ -119,17 +132,62 @@ def FindBestThresh(xs: pd.DataFrame, ys: pd.DataFrame, feature: int) -> tuple:
 
     # Convert to midpoints
     if BestThreshPos < len(xs) - 1:
-        BestThreshPos = (xs[feature][i] + xs[feature][i + 1]) / 2
+        BestThreshPos = (xs[feature][BestThreshPos] + xs[feature][BestThreshPos + 1]) / 2
     else:
         BestThreshPos = -float('inf')
     
     if BestThreshNeg < len(xs) - 1:
-        BestThreshNeg = (xs[feature][i] + xs[feature][i + 1]) / 2
+        BestThreshNeg = (xs[feature][BestThreshNeg] + xs[feature][BestThreshNeg + 1]) / 2
     else:
         BestThreshNeg = -float('inf')
 
     # Return better of NEG or POS
     if BestErrorPos < BestErrorNeg:
-        return (1, BestThreshPos, BestErrorPos)
+        return (1, BestThreshPos, BestErrorPos / Total)
     else:
-        return (-1, BestThreshNeg, BestErrorNeg)
+        return (-1, BestThreshNeg, BestErrorNeg / Total)
+
+def BestThreshOfFeature(xs : list, ys : list, features : list) -> tuple:
+    Bs = None
+    Bi = None
+    Be = float('inf')
+    Bf = None
+    for feature in features:
+        s, i, e = FindBestThresh(xs[feature], ys[feature], feature)
+        if e < Be:
+            Bs = s
+            Bi = i
+            Be = e
+            Bf = feature
+
+    return ((Bs, Bi), Be, Bf)
+
+def GenerateGOpt(iterations, xs, ys, features):
+    Gs = []
+    for _ in range(iterations):
+        g, e, f= BestThreshOfFeature(xs, ys, features)
+        d = np.sqrt((1-e) / e)
+        UpdateYOpt(xs, ys, g, d, f, features)
+        Gs.append(((g, f), np.log(d)))
+    
+    return Gs
+
+def UpdateYOpt(xs, ys, g, d, feature, features):
+    s, thresh = g
+    for f in features:
+        xss = xs[f]
+        yss = ys[f]
+
+        for i in range(len(xss)):
+            # incorrect
+            if xss[feature][i] * s < thresh:
+                yss[i] = yss[i] * d
+            # correct
+            else:
+                yss[i] = yss[i] / d
+#%%
+features = [0, 1]
+iterations = 300
+G = GenerateGOpt(iterations, trainX, trainY, features)
+#%%
+G
