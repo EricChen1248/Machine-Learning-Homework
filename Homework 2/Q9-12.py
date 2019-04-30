@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import random
 from sklearn.linear_model import RidgeClassifier
-from sklearn.metrics import zero_one_loss, make_scorer
 
 #%%
 DATA = 'hw2_lssvm_all.dat'
