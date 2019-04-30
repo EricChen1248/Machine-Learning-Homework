@@ -1,7 +1,7 @@
 #%%
 import numpy as np
 import pandas as pd
-
+import matplotlib.pyplot as plt
 
 #%%
 TRAIN = 'hw2_adaboost_train.dat'
@@ -191,3 +191,60 @@ iterations = 300
 G = GenerateGOpt(iterations, trainX, trainY, features)
 #%%
 G
+
+#%%
+def CalcEinWithStump(xs : pd.DataFrame, ys : pd.DataFrame, g: tuple) -> list:
+    xss = xs[0]
+    yss = ys[0]
+    ((s, thresh), feature), _ = g
+    prediction = []
+    for i in range(len(xss)):
+        if xss[feature][i] < thresh:
+            pred = s
+        else:
+            pred = -s
+
+        if yss[i] * pred < 0:
+            prediction.append(False)
+        else:
+            prediction.append(True)
+    
+    return prediction
+
+def CalcEinWithG(xs: pd.DataFrame, ys : pd.DataFrame, G: list) -> float:
+    xss = xs[0]
+    yss = ys[0]
+
+    totalWrong = 0
+    for i in range(len(xss)):
+        wrong = 0
+        for g in G:
+            if xss[feature][i] < thresh:
+                pred = s
+            else:
+                pred = -s
+
+            if yss[i] * pred < 0:
+                wrong += a
+            else:
+                wrong -= a
+            
+        totalWrong += 1 if wrong > 0 else 0
+    return totalWrong / len(xss)
+
+#%%
+predictions = []
+for g in G:
+    predictions.append(CalcEinWithStump(trainX, trainY, g))
+
+#%%
+alphas = []
+for g in G:
+    ((s, thresh), feature), a = g
+    alphas.append(a)
+rates = []
+for i in range(len(G)):
+    rates.append(np.dot(predictions[i],  alphas))
+print(rates)
+
+
