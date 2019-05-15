@@ -1,10 +1,19 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from multiprocessing import Process, Queue
 
 
+def scale(data):
+    data[0] = data[0].values.astype(float) * 10**6
+    data[0] = data[0].values.astype(int)
+    data[1] = data[1].values.astype(float) * 10**6
+    data[1] = data[1].values.astype(int)
+    
 train = pd.read_csv('hw3_train.dat', header=None, delimiter=' ')
+scale(train)
 test = pd.read_csv('hw3_test.dat', header=None, delimiter=' ')
+scale(test)
 
 def Gini(group : pd.DataFrame) -> float:
     classes = [1, -1]
@@ -33,37 +42,36 @@ def GiniGroup(groups : list) -> float:
 
     return gini
 
-def Slice(data : pd.DataFrame, index: int, value : int):
-    return (data[data[index] <= value], data[data[index] > value])
+def Slice(data : pd.DataFrame, value : int):
+    return (data.iloc[:value], data.iloc[value:])
 
-def FindBestGini(data : pd.DataFrame) -> tuple:
+def FindBestGini(datas : list) -> tuple:
     bestGini = float('inf')
     bestVal = 0
+    bestJ = 0
     dir = None
-    
-    for _, row in data.iterrows():
-        cut = Slice(data, 0, row[0])
+    for i in range(2):
+        rowI = 0
+        data = datas[i]
+        for _, row in data.iterrows():
+            cut = Slice(data, rowI)
+            
+            gini = GiniGroup(cut)
 
-        gini = GiniGroup(cut)
+            if bestGini > gini:
+                bestGini = gini
+                bestVal = row[i]
+                bestJ = rowI
+                dir = i
 
-        if bestGini > gini:
-            bestGini = gini
-            bestVal = row[0]
-            dir = 0
-
-        cut = Slice(data, 1, row[1])
-
-        gini = GiniGroup(cut)
-
-        if bestGini > gini:
-            bestGini = gini
-            bestVal = row[1]
-            dir = 1
-        
+            rowI += 1
+            if bestGini == 0:
+                break
+                    
         if bestGini == 0:
             break
 
-    return (bestVal, dir)
+    return (bestVal, dir, bestJ)
 
 def PredictAndCalculate(data, tree):
     wrong = 0
@@ -74,32 +82,43 @@ def PredictAndCalculate(data, tree):
     return wrong / data.shape[0]
 
 class DecisionTree:
-    def __init__(self, data, height = 1, parent = None):
-        self.data = data
+    def __init__(self, datas, height = 1, parent = None):
+        self.datas = datas
         self.parent = parent
         self.__height = height
 
-    def learn(self, unLearned):
-        self.G = FindBestGini(self.data)
-        cut = Slice(self.data, self.G[1], self.G[0])
+    def __cut(self, ref, data):
+        index = set(ref[0]['index'].tolist())
+        return (data[data['index'].isin(index)], data[~data['index'].isin(index)])
 
-        if Gini(cut[0]) == 0:
+    def learn(self, unLearned):
+        self.G = FindBestGini(self.datas)
+        G = self.G
+        cuts = [None, None]
+        chosen = G[1]
+        cut = Slice(self.datas[chosen], G[2])
+        cuts[chosen] = cut
+
+        other = (chosen + 1) % 2
+        cuts[other] = self.__cut(cut, self.datas[other])
+ 
+        if Gini(cuts[chosen][0]) == 0:
             # left side, value column, first item
-            self.leftTree = int(cut[0][2].iloc[0])
+            self.leftTree = int(cuts[chosen][0][2].iloc[0])
         else:
-            self.leftTree = DecisionTree(cut[0], self.__height + 1, self)
+            self.leftTree = DecisionTree((cuts[0][0], cuts[1][0]), self.__height + 1, self)
             unLearned.append(self.leftTree)
 
 
-        if Gini(cut[1]) == 0:
-            self.rightTree = int(cut[1][2].iloc[0])
+        if Gini(cuts[chosen][1]) == 0:
+            self.rightTree = int(cuts[chosen][1][2].iloc[0])
         else:
-            self.rightTree = DecisionTree(cut[1], self.__height + 1, self)
+            self.rightTree = DecisionTree((cuts[0][1], cuts[1][1]), self.__height + 1, self)
             unLearned.append(self.rightTree)
 
 
     def predict(self, data):
-        if data[self.G[1]] <= self.G[0]:
+        if data[self.G[1]] < self.G[0]:
             return self.__predict(self.leftTree, data)
 
         return self.__predict(self.rightTree, data)
@@ -116,8 +135,9 @@ class DecisionTree:
         return max(lHeight, rHeight)    
 
     def __getMost(self):
-        count1 = self.data[self.data[2] == 1].shape[0]
-        if count1 > self.data.shape[0] - count1:
+        d = self.datas[0]
+        count1 = d[d[2] == 1].shape[0]
+        if count1 > d.shape[0] - count1:
             return 1
         else:
             return -1
@@ -135,14 +155,20 @@ class DecisionTree:
                 self.rightTree.prune(height)
 
 # Single Tree
-dTree = DecisionTree(train)
+trainX = train.sort_values(by=0).reset_index()
+trainY = train.sort_values(by=1).reset_index()
+
+dTree = DecisionTree((trainX, trainY))
 unLearned = [dTree]
 
 ins = []
 outs= []
+iter = 0
 while len(unLearned) > 0:
     tree = unLearned.pop()
     tree.learn(unLearned)
+    print(iter, end='\r')
+    iter += 1
 
 height = dTree.getTreeHeight()
 
@@ -177,6 +203,10 @@ plotTuple(outs, "Eout")
 plt.legend()
 plt.show()
 
+
+def GenTree(q):
+    pass
+
 treeCount = 100 #30_000
 # Random Forest
 sampleSize = int(train.shape[0] * 0.8)
@@ -185,7 +215,10 @@ print("Generating Random Forest")
 for i in range(treeCount):
     print(i + 1, end='\r')
     sample = train.sample(sampleSize)
-    dTree = DecisionTree(sample)
+    sampleX = sample.sort_values(by=0).reset_index()
+    sampleY = sample.sort_values(by=1).reset_index()
+    
+    dTree = DecisionTree((sampleX, sampleY))
 
     trees.append(dTree)
     unLearned = [dTree]
