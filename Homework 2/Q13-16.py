@@ -9,108 +9,32 @@ TEST = 'hw2_adaboost_test.dat'
 
 train = pd.read_csv(TRAIN, sep=' ', header=None)
 train = train.astype(float)
-train0 = train.sort_values(train.columns[0])
-train1 = train.sort_values(train.columns[1])
-
-trainX = [None, None]
-trainY = [None, None]
-
-trainX[0] = train0[train0.columns[:-1]]
-trainY[0] = train0[train0.columns[-1]]
-
-trainX[1] = train1[train1.columns[:-1]]
-trainY[1] = train1[train1.columns[-1]]
-
-#trainY = [float(y.replace('\n')) for y in trainY]
+orders = [np.argsort(train[0]), np.argsort(train[1])]
+trainX = train[train.columns[:-1]]
+trainY = train[train.columns[-1]]
 
 test = pd.read_csv(TEST, sep=' ', header=None)
 testX = test[test.columns[:-1]]
 testY = test[test.columns[-1]]
-#%%
-'''
-def GenerateStump(xs, feature):
-    stumps = []
-    for r in range(len(xs) - 1):
-        stumps.append((xs[feature][r] + xs[feature][r + 1]) / 2)
-    
-    return stumps
-
-def CalculateError(xs, ys, thresh, feature):
-    wrong = 0
-    for i in range(len(xs)):
-        x = xs[feature][i]
-        y = ys[i]
-
-        if x < thresh:
-            pred = -1
-        else:
-            pred = +1
-        
-        # if stump is wrong, add u
-        if y * pred < 0:
-            wrong += abs(y)
-
-    rate = wrong / sum([abs(y) for y in ys])
-    if rate > 0.5:
-        return (+1, rate)
-    else:
-        return (-1, 1 - rate)
-
-def BestStump(xs : pd.DataFrame, ys : pd.DataFrame, features : list, stumps : list) -> tuple:
-    BestError = float('inf')
-    BestS = None
-    for feature in features:
-        for stump in stumps[feature]:
-            s, error = CalculateError(xs, ys, stump, feature)
-
-            if error < BestError:
-                BestS = (s, feature, stump)
-                BestError = error
-
-    return (BestS, BestError)
-
-def UpdateY(xs, ys, g, d):
-    s, feature, thresh = g
-    for i in range(len(xs)):
-        # incorrect
-        if xs[feature][i] * s < thresh:
-            ys[i] = ys[i] * d
-        # correct
-        else:
-            ys[i] = ys[i] / d
-            
-def GenerateG(iterations, xs, ys, features, stumps):
-    Gs = []
-    for _ in range(iterations):
-        g, e = BestStump(xs, ys, features, stumps)
-        d = np.sqrt((1-e) / e)
-        UpdateY(xs, ys, g, d)
-        Gs.append((g, np.log(d)))
-    
-    return Gs
-
-#%%  
-features = [0, 1]
-stumps = [GenerateStump(trainX, feature) for feature in features]
-iterations = 10
-
-G = GenerateG(iterations, trainX, trainY, features, stumps)
-
-#%%
-print(G)
-'''
 
 #%%
 # returns (s, i, e)
-def FindBestThresh(xs: pd.DataFrame, ys: pd.DataFrame, feature: int) -> tuple:
+Totals = []
+def FindBestThresh(xs: pd.DataFrame, ys: pd.DataFrame, feature: int, orders : list) -> tuple:
     Total = sum(abs(y) for y in ys)
+    Totals.append(Total)
     BestErrorPos = abs(sum((y if y <= 0 else 0) for y in ys))
+    BestErrorCountPos = sum((1 if y <= 0 else 0) for y in ys)
+    BestErrorCountNeg = sum((1 if y > 0 else 0) for y in ys)
     BestErrorNeg = abs(sum((y if y > 0 else 0) for y in ys))
     BestThreshPos = 0
     BestThreshNeg = 0
     curErrorPos = BestErrorPos
     curErrorNeg = BestErrorNeg
-    for i in range(len(xs) - 1):
+
+
+    for j in range(len(orders[feature]) - 1):
+        i = orders[feature][j]
         y = ys[i]
 
         # if y on pos side of NEG, NEG has more error if y < 0 (- <0 == increase)
@@ -124,36 +48,54 @@ def FindBestThresh(xs: pd.DataFrame, ys: pd.DataFrame, feature: int) -> tuple:
 
         if curErrorPos < BestErrorPos:
             BestErrorPos = curErrorPos
-            BestThreshPos = i
+            BestThreshPos = j
 
         if curErrorNeg < BestErrorNeg:
             BestErrorNeg = curErrorNeg
-            BestThreshNeg = i
+            BestThreshNeg = j
 
     # Convert to midpoints
     if BestThreshPos < len(xs) - 1:
-        BestThreshPos = (xs[feature][BestThreshPos] + xs[feature][BestThreshPos + 1]) / 2
+        BestThreshPos = (xs[feature][orders[feature][BestThreshPos]] + xs[feature][orders[feature][BestThreshPos + 1]]) / 2
     else:
         BestThreshPos = -float('inf')
     
     if BestThreshNeg < len(xs) - 1:
-        BestThreshNeg = (xs[feature][BestThreshNeg] + xs[feature][BestThreshNeg + 1]) / 2
+        BestThreshNeg = (xs[feature][orders[feature][BestThreshNeg]] + xs[feature][orders[feature][BestThreshNeg + 1]]) / 2
     else:
         BestThreshNeg = -float('inf')
 
+    wrongP = 0
+    wrongN = 0
+    for i in range(len(xs[0])):
+
+        if xs[feature][i] < BestThreshPos:
+            predP = 1
+        else:
+            predP = -1
+        if ys[i] * predP > 0:
+            wrongP += 1
+            
+        if xs[feature][i] < BestThreshNeg:
+            predN = -1
+        else:
+            predN = 1
+        if ys[i] * predN > 0:
+            wrongN += 1
+
     # Return better of NEG or POS
     if BestErrorPos < BestErrorNeg:
-        return (1, BestThreshPos, BestErrorPos / Total)
+        return (1, BestThreshPos, wrongP / 100)
     else:
-        return (-1, BestThreshNeg, BestErrorNeg / Total)
+        return (-1, BestThreshNeg, wrongN / 100)
 
-def BestThreshOfFeature(xs : list, ys : list, features : list) -> tuple:
+def BestThreshOfFeature(xs : list, ys : list, features : list, orders : list) -> tuple:
     Bs = None
     Bi = None
     Be = float('inf')
     Bf = None
     for feature in features:
-        s, i, e = FindBestThresh(xs[feature], ys[feature], feature)
+        s, i, e = FindBestThresh(xs, ys, feature, orders)
         if e < Be:
             Bs = s
             Bi = i
@@ -162,89 +104,123 @@ def BestThreshOfFeature(xs : list, ys : list, features : list) -> tuple:
 
     return ((Bs, Bi), Be, Bf)
 
-def GenerateGOpt(iterations, xs, ys, features):
+def GenerateGOpt(iterations, xs, ys, features, orders):
     Gs = []
     for _ in range(iterations):
-        g, e, f= BestThreshOfFeature(xs, ys, features)
+        g, e, f = BestThreshOfFeature(xs, ys, features, orders)
         d = np.sqrt((1-e) / e)
-        UpdateYOpt(xs, ys, g, d, f, features)
+        UpdateYOpt(xs, ys, g, d, f)
         Gs.append(((g, f), np.log(d)))
     
     return Gs
 
-def UpdateYOpt(xs, ys, g, d, feature, features):
+def UpdateYOpt(xs, ys, g, d, feature):
     s, thresh = g
-    for f in features:
-        xss = xs[f]
-        yss = ys[f]
-
-        for i in range(len(xss)):
-            # incorrect
-            if xss[feature][i] * s < thresh:
-                yss[i] = yss[i] * d
-            # correct
-            else:
-                yss[i] = yss[i] / d
-#%%
-features = [0, 1]
-iterations = 300
-G = GenerateGOpt(iterations, trainX, trainY, features)
-#%%
-G
-
-#%%
-def CalcEinWithStump(xs : pd.DataFrame, ys : pd.DataFrame, g: tuple) -> list:
-    xss = xs[0]
-    yss = ys[0]
-    ((s, thresh), feature), _ = g
-    prediction = []
-    for i in range(len(xss)):
-        if xss[feature][i] < thresh:
+    for i in range(len(xs[0])):
+        if xs[feature][i] < thresh:
             pred = s
         else:
             pred = -s
 
-        if yss[i] * pred < 0:
-            prediction.append(False)
+        if ys[i] * pred < 0:
+            ys[i] = ys[i] / d
         else:
-            prediction.append(True)
+            ys[i] = ys[i] * d
+            
+def CalcEinWithStump(xs : pd.DataFrame, ys : pd.DataFrame, g: tuple) -> list:
+    ((s, thresh), feature), _ = g
+    prediction = []
+    for i in range(len(xs)):
+        if xs[feature][i] < thresh:
+            pred = s
+        else:
+            pred = -s
+
+        if ys[i] * pred < 0:
+            prediction.append(-1)
+        else:
+            prediction.append(1)
     
     return prediction
 
-def CalcEinWithG(xs: pd.DataFrame, ys : pd.DataFrame, G: list) -> float:
-    xss = xs[0]
-    yss = ys[0]
-
-    totalWrong = 0
-    for i in range(len(xss)):
-        wrong = 0
-        for g in G:
-            if xss[feature][i] < thresh:
-                pred = s
-            else:
-                pred = -s
-
-            if yss[i] * pred < 0:
-                wrong += a
-            else:
-                wrong -= a
-            
-        totalWrong += 1 if wrong > 0 else 0
-    return totalWrong / len(xss)
-
 #%%
+features = [0, 1]
+iterations = 300
+Totals = []
+G = GenerateGOpt(iterations, trainX, trainY, features, orders)
+
+
+train = pd.read_csv(TRAIN, sep=' ', header=None)
+train = train.astype(float)
+orders = [np.argsort(train[0]), np.argsort(train[1])]
+
+trainX = train[train.columns[:-1]]
+trainY = train[train.columns[-1]]
+
+alphas = []
 predictions = []
 for g in G:
+    _, a = g
+    alphas.append(a)
     predictions.append(CalcEinWithStump(trainX, trainY, g))
 
 #%%
-alphas = []
-for g in G:
-    ((s, thresh), feature), a = g
-    alphas.append(a)
+wrongs = []
+for t in range(iterations):
+    wrong = 0
+    for i in range(len(trainY)):
+        if trainY[i] != predictions[t][i]:
+            wrong += 1
+    wrongs.append(wrong / len(trainY))
+
 rates = []
 for i in range(len(G)):
-    rates.append(np.dot(predictions[i],  alphas))
-print(rates)
+    rates.append(np.array(predictions[i]) * alphas[i])
+
+wrongG = []
+for i in range(iterations):
+    wrong = 0
+    pred = np.sum(rates[0:i + 1], axis=0)
+    for j in range(len(trainY)):
+        if pred[j] * trainY[j] < 0:
+            wrong += 1
+    wrongG.append(wrong / len(trainY))
 
 
+#%%
+outPredictions = []
+for g in G:
+    outPredictions.append(CalcEinWithStump(testX, testY, g))
+
+ratesOut = []
+for i in range(len(G)):
+    ratesOut.append(np.array(outPredictions[i]) * alphas[i])
+
+wrongGOut = []
+for i in range(iterations):
+    wrong = 0
+    pred = np.sum(ratesOut[0:i + 1], axis=0)
+    for j in range(len(testY)):
+        if pred[j] * testY[j] < 0:
+            wrong += 1
+    wrongGOut.append(wrong / len(testY))
+#%%
+
+#13
+print(f"Ein(gT):\t{wrongs[-1]}")
+print(f"Ein(G):\t\t{wrongG[-1]}")
+print(f"UT:\t\t{Totals[-1]}")
+print(f"Eout(G):\t{wrongGOut[-1]}")
+plt.plot(wrongs)
+plt.show()
+
+#14
+plt.plot(wrongG)
+plt.show()
+
+#15
+plt.plot(Totals[1::2])
+plt.show()
+#16
+plt.plot(wrongGOut)
+plt.show()

@@ -1,0 +1,7 @@
+.py file is the original code file formatted for use with vscode jupyter extension. It can be directly run through python 3
+.ipynb is the jupyter notebook format of the executed code with its corresponding outputs.
+
+required packages:
+    numpy
+    pandas
+    matplotlib
